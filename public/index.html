@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="de" data-theme="light">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Minimal Web Push Demo</title>
+        <link
+            rel="stylesheet"
+            href="https://unpkg.com/@picocss/pico@2/css/pico.min.css"
+        />
+        <script
+            defer
+            src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"
+        ></script>
+    </head>
+    <body x-data="app()">
+        <main class="container">
+            <h1>Minimal Web Push Demo</h1>
+            <p>Status: <strong x-text="status"></strong></p>
+
+            <div role="group">
+                <button @click="registerSW" :disabled="busy">
+                    1) Service Worker registrieren
+                </button>
+                <button @click="subscribe" :disabled="!ready || busy">
+                    2) Subscribe & beim Server registrieren
+                </button>
+                <button @click="trigger" :disabled="!subscribed || busy">
+                    3) Push in 10s auslösen
+                </button>
+            </div>
+
+            <details>
+                <summary>Details / Logs</summary>
+                <pre style="white-space: pre-wrap" x-text="log"></pre>
+            </details>
+        </main>
+
+        <script>
+            // Aus web.dev-Kontext: Umwandlung Base64URL -> Uint8Array (für applicationServerKey)
+            // https://web.dev/articles/push-notifications-subscribing-a-user
+            function urlBase64ToUint8Array(base64String) {
+                const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+                const base64 = (base64String + padding)
+                    .replace(/-/g, "+")
+                    .replace(/_/g, "/");
+                const rawData = atob(base64);
+                const outputArray = new Uint8Array(rawData.length);
+                for (let i = 0; i < rawData.length; ++i)
+                    outputArray[i] = rawData.charCodeAt(i);
+                return outputArray;
+            }
+
+            function app() {
+                return {
+                    status: "Bereit",
+                    log: "",
+                    ready: false,
+                    subscribed: false,
+                    busy: false,
+
+                    logLine(m) {
+                        this.log += m + "\n";
+                    },
+
+                    async registerSW() {
+                        this.busy = true;
+                        try {
+                            if (!("serviceWorker" in navigator))
+                                throw new Error("Kein Service Worker Support");
+                            const reg =
+                                await navigator.serviceWorker.register(
+                                    "/sw.js",
+                                );
+                            await navigator.serviceWorker.ready;
+                            this.ready = true;
+                            this.status =
+                                "Service Worker bereit. Bitte Benachrichtigungen erlauben.";
+                            this.logLine(
+                                "SW registriert: " + (reg.scope || ""),
+                            );
+                        } catch (e) {
+                            this.logLine("SW Fehler: " + e.message);
+                            this.status = "Fehler bei SW";
+                        } finally {
+                            this.busy = false;
+                        }
+                    },
+
+                    async subscribe() {
+                        this.busy = true;
+                        try {
+                            // 1) Permission einholen
+                            const perm = await Notification.requestPermission();
+                            if (perm !== "granted")
+                                throw new Error("Notifications nicht erlaubt");
+                            // 2) VAPID Public Key holen
+                            const { publicKey } = await fetch(
+                                "/vapidPublicKey",
+                            ).then((r) => r.json());
+                            // 3) Subscribe
+                            const reg = await navigator.serviceWorker.ready;
+                            const subscription =
+                                await reg.pushManager.subscribe({
+                                    userVisibleOnly: true,
+                                    applicationServerKey:
+                                        urlBase64ToUint8Array(publicKey),
+                                });
+                            // 4) Beim Server registrieren
+                            const ok = await fetch("/subscribe", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(subscription),
+                            }).then((r) => r.json());
+                            if (!ok?.ok)
+                                throw new Error("Server ablehnte Subscription");
+                            this.subscribed = true;
+                            this.status =
+                                "Subscribed & beim Server registriert.";
+                            this.logLine(
+                                "Subscription gespeichert. Count=" + ok.count,
+                            );
+                        } catch (e) {
+                            this.logLine("Subscribe Fehler: " + e.message);
+                            this.status = "Fehler beim Subscribe";
+                        } finally {
+                            this.busy = false;
+                        }
+                    },
+
+                    async trigger() {
+                        this.busy = true;
+                        try {
+                            const res = await fetch("/trigger", {
+                                method: "POST",
+                            }).then((r) => r.json());
+                            this.logLine(
+                                "Trigger ok. Sende in " +
+                                    res.scheduledInSeconds +
+                                    "s an " +
+                                    res.targets +
+                                    " Ziel(e).",
+                            );
+                            this.status = "Push wird vorbereitet ...";
+                        } catch (e) {
+                            this.logLine("Trigger Fehler: " + e.message);
+                            this.status = "Fehler beim Trigger";
+                        } finally {
+                            this.busy = false;
+                        }
+                    },
+                };
+            }
+        </script>
+    </body>
+</html>

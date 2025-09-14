@@ -56,9 +56,9 @@ app.post("/trigger", async (req, res) => {
   }, 10_000);
 });
 
-// Start
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`➡ Server on http://localhost:${PORT}`);
+// Start - Replit erfordert 0.0.0.0:5000 für Frontend
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`➡ Server on http://0.0.0.0:${PORT}`);
   console.log(`➡ VAPID public key:\n${publicKey}`);
 });
