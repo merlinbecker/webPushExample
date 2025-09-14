@@ -1,0 +1,17 @@
+{
+  "name": "webpush-example",
+  "version": "1.0.0",
+  "description": "Ein minimales Beispiel für eine WebPush Integration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "web-push": "^3.6.6"
+  },
+  "keywords": ["webpush", "notifications", "pwa"],
+  "author": "",
+  "license": "ISC"
+}
