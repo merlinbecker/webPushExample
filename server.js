@@ -29,7 +29,17 @@ app.get("/vapidPublicKey", (_req, res) => {
 // Client registriert/aktualisiert Subscription
 app.post("/subscribe", (req, res) => {
   const sub = req.body;
-  if (!sub || !sub.endpoint) return res.status(400).json({ ok: false });
+  if (
+    !sub ||
+    !sub.endpoint ||
+    !sub.keys ||
+    typeof sub.keys.p256dh !== "string" ||
+    typeof sub.keys.auth !== "string" ||
+    !sub.keys.p256dh ||
+    !sub.keys.auth
+  ) {
+    return res.status(400).json({ ok: false, error: "Missing required subscription properties" });
+  }
   subscriptions.set(sub.endpoint, sub);
   res.json({ ok: true, count: subscriptions.size });
 });
